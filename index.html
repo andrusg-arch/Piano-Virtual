@@ -73,6 +73,12 @@ button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
     </div>
 
     <div class="keyboard-wrap" role="application" aria-label="Piano">
+      <div class="ear-trainer" style="margin-top:20px;padding:12px;background:var(--panel);border-radius:12px;">
+  <h2>🎧 Entrenador de oído</h2>
+  <button id="playRandomNote" class="primary" style="margin-bottom:10px;">Reproducir nota aleatoria</button>
+  <div id="noteButtons" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+  <div id="earTrainerResult" style="margin-top:10px;color:var(--accent);font-weight:bold;"></div>
+      </div>
       <div id="keyboard" class="keyboard" tabindex="0" aria-label="Piano keyboard">
         <div id="whiteContainer" class="white-keys" aria-hidden="false"></div>
         <div id="blackContainer" class="black-container" aria-hidden="false"></div>
@@ -135,7 +141,21 @@ document.addEventListener('selectstart', e => e.preventDefault());
 // notes build
 const semitones = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const notes = [];
-const startOct = 2;
+const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const noteButtonsContainer = document.getElementById('noteButtons');
+noteNames.forEach(n=>{
+  const btn = document.createElement('button');
+  btn.textContent = n;
+  btn.style.padding = "8px 12px";
+  btn.style.borderRadius = "6px";
+  btn.style.background = "var(--accent)";
+  btn.style.color = "#012";
+  btn.style.border = "none";
+  btn.style.cursor = "pointer";
+  btn.addEventListener('click', ()=> checkNote(n));
+  noteButtonsContainer.appendChild(btn);
+});
+  const startOct = 2;
 const octCount = 5; // C2..B6
 for(let o = startOct; o < startOct + octCount; o++){
   for(let i=0;i<12;i++){
@@ -232,7 +252,29 @@ function createVoiceNodes(preset, freq){
   oscA.start(); oscB.start();
   return {oscA,oscB,gain,filter,stopAt(after){ const now=audioCtx.currentTime; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value,now); gain.gain.linearRampToValueAtTime(0.0001, now+after); try{ oscA.stop(now+after+0.02); oscB.stop(now+after+0.02);}catch(e){} } };
 }
+let currentRandomNote = null;
 
+document.getElementById('playRandomNote').addEventListener('click', ()=>{
+  const randomIndex = Math.floor(Math.random() * notes.length);
+  const note = notes[randomIndex];
+  currentRandomNote = note.name;
+  noteOn(randomIndex, 0.95);
+  setTimeout(()=> noteOff(randomIndex), 1000); // Sonido de 1 segundo
+  document.getElementById('earTrainerResult').textContent = '';
+});
+
+function checkNote(selectedNote){
+  if(!currentRandomNote){
+    alert("Primero reproduce una nota aleatoria!");
+    return;
+  }
+  if(selectedNote === currentRandomNote.replace(/\d/,'') ){ // Ignoramos el número de octava
+    document.getElementById('earTrainerResult').textContent = "¡Correcto! 🎉";
+  } else {
+    document.getElementById('earTrainerResult').textContent = "Incorrecto, intenta otra vez ❌";
+  }
+  }
+  
 function noteOn(idx, velocity=1){
   if(activeVoices.has(idx)) return;
   const n = notes[idx]; if(!n) return;
