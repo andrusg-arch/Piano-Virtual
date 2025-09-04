@@ -71,13 +71,33 @@ button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
       <div class="control-group"><label class="small">Reverb</label><input id="reverb" type="range" min="0" max="0.8" step="0.01" value="0.12"></div>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center"><button id="sustainBtn">Sustain: off</button><button id="resetBtn" class="primary">Reset</button></div>
     </div>
-
+<div style="margin-bottom:8px;">
+  <button id="toggleEarTrainer" class="primary">Entrenador de oído ▼</button>
+                                                                                                                           </div>
     <div class="keyboard-wrap" role="application" aria-label="Piano">
       <div class="ear-trainer" style="margin-top:20px;padding:12px;background:var(--panel);border-radius:12px;">
   <h2>🎧 Entrenador de oído</h2>
   <button id="playRandomNote" class="primary" style="margin-bottom:10px;">Reproducir nota aleatoria</button>
   <div id="noteButtons" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
   <div id="earTrainerResult" style="margin-top:10px;color:var(--accent);font-weight:bold;"></div>
+      </div>
+      <div id="earTrainerPanel" style="display:none; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+  <button id="playRandomNote" class="primary">Reproducir nota aleatoria</button>
+  <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">
+    <button class="noteBtn">C</button>
+    <button class="noteBtn">C#</button>
+    <button class="noteBtn">D</button>
+    <button class="noteBtn">D#</button>
+    <button class="noteBtn">E</button>
+    <button class="noteBtn">F</button>
+    <button class="noteBtn">F#</button>
+    <button class="noteBtn">G</button>
+    <button class="noteBtn">G#</button>
+    <button class="noteBtn">A</button>
+    <button class="noteBtn">A#</button>
+    <button class="noteBtn">B</button>
+  </div>
+  <div id="earTrainerResult" style="margin-top:8px; font-weight:bold; color:#00d4b4;"></div>
       </div>
       <div id="keyboard" class="keyboard" tabindex="0" aria-label="Piano keyboard">
         <div id="whiteContainer" class="white-keys" aria-hidden="false"></div>
@@ -92,7 +112,18 @@ button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
 <script>
 /* Fixed: black keys on separate container and positioned relative to white keys.
    Keeps previous features. */
+const toggleBtn = document.getElementById('toggleEarTrainer');
+const earTrainerPanel = document.getElementById('earTrainerPanel');
 
+toggleBtn.addEventListener('click', () => {
+  if(earTrainerPanel.style.display === 'none'){
+    earTrainerPanel.style.display = 'block';
+    toggleBtn.textContent = 'Entrenador de oído ▲';
+  } else {
+    earTrainerPanel.style.display = 'none';
+    toggleBtn.textContent = 'Entrenador de oído ▼';
+  }
+});
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioCtx();
 const masterGain = audioCtx.createGain();
