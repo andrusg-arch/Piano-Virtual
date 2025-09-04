@@ -287,7 +287,16 @@ function noteOff(idx){
   setTimeout(()=> { activeVoices.delete(idx); }, (v.release + 0.06)*1000);
   markKey(idx, false);
 }
+// ---------- ENTRENADOR DE OÍDO ----------
+function playRandomNote() {
+  const randomIndex = Math.floor(Math.random() * notes.length);
+  noteOn(randomIndex, 1);           // suena la nota
+  setTimeout(() => noteOff(randomIndex), 1000); // se apaga después de 1s
+  return randomIndex;               // devuelve índice para compararlo con la respuesta
+}
 
+// variable para guardar la nota actual que suena
+let currentEarTrainingNote = null;
 function releaseAllHeld(){
   activeVoices.forEach((v, idx)=>{
     if(v.released){
@@ -297,7 +306,52 @@ function releaseAllHeld(){
     }
   });
 }
+// Crear panel desplegable
+const earPanel = document.createElement('div');
+earPanel.style.background = '#0b2330';
+earPanel.style.padding = '10px';
+earPanel.style.marginBottom = '12px';
+earPanel.style.borderRadius = '10px';
+earPanel.style.display = 'none'; // oculto por defecto
+earPanel.id = 'earTrainingPanel';
 
+const toggleBtn = document.createElement('button');
+toggleBtn.textContent = '🎧 Entrenador de oído ▼';
+toggleBtn.style.marginBottom = '6px';
+toggleBtn.onclick = () => {
+  earPanel.style.display = earPanel.style.display === 'none' ? 'block' : 'none';
+}
+
+document.querySelector('.keyboard-wrap').prepend(toggleBtn);
+document.querySelector('.keyboard-wrap').prepend(earPanel);
+
+// botones de notas
+const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+noteNames.forEach(n=>{
+  const btn = document.createElement('button');
+  btn.textContent = n;
+  btn.style.margin = '2px';
+  btn.onclick = () => {
+    if(currentEarTrainingNote === null) return;
+    const selectedNote = n + Math.floor(currentEarTrainingNote / 12); // convertir índice a nota con octava
+    if(notes[currentEarTrainingNote].name === selectedNote){
+      alert('✅ Correcto!');
+      currentEarTrainingNote = null;
+    } else {
+      alert('❌ Incorrecto! Era ' + notes[currentEarTrainingNote].name);
+    }
+  };
+  earPanel.appendChild(btn);
+});
+
+// botón para generar nueva nota
+const playBtn = document.createElement('button');
+playBtn.textContent = '🔊 Reproducir nota';
+playBtn.style.marginLeft = '10px';
+playBtn.onclick = () => {
+  currentEarTrainingNote = playRandomNote();
+};
+earPanel.appendChild(playBtn);
 function markKey(idx, on){
   const white = keyboardEl.querySelector(`.white[data-index="${idx}"]`);
   const black = keyboardEl.querySelector(`.black[data-index="${idx}"]`);
