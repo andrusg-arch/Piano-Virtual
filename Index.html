@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Piano Virtual — Andrés Giraldo (Blacks fixed)</title>
+<style>
+:root{
+  --bg:#071126; --panel:#0b2330; --muted:#9fb0bd; --accent:#00d4b4;
+  --white:#fffdf6; --white-edge:#d4cec4; --black:#0b0f12;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#021018);color:#e6f4f2;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+.app{max-width:1200px;margin:18px auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.header{display:flex;justify-content:space-between;align-items:start;gap:12px}
+h1{margin:0;font-size:20px}
+.subtitle{margin:4px 0 0;color:var(--muted);font-size:13px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;background:var(--panel);padding:10px;border-radius:12px}
+.control-group{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:13px}
+select,input[type=range],button{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px;border-radius:8px}
+button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
+.keyboard-wrap{background:linear-gradient(180deg,#041427,#021018);padding:12px;border-radius:12px}
+.keyboard{position:relative;width:100%;overflow-x:auto;border-radius:8px;padding:8px}
+.white-keys{display:flex;gap:0;align-items:flex-end;height:320px;position:relative}
+.white{width:64px;height:100%;background:var(--white);border-left:1px solid var(--white-edge);border-right:1px solid var(--white-edge);border-bottom:12px solid #ddd;border-radius:6px 6px 0 0;position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:center;cursor:pointer}
+.white .lbl{font-size:11px;color:#222;padding:6px}
+.white.pressed{background:linear-gradient(180deg,#fff8d6,#fff3c9);transform:translateY(4px)}
+.black-container{position:absolute;top:8px;left:8px;right:8px;bottom:0;pointer-events:none} /* container for black keys - absolute over whites */
+.black{position:absolute;width:19px;height:58%;background:var(--black);border-radius:0 0 6px 6px;z-index:3;display:flex;align-items:flex-end;justify-content:center;color:#fff;cursor:pointer;pointer-events:auto;box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+.black .lbl{font-size:11px;padding:6px}
+.black.pressed{background:#222;transform:translateY(4px)}
+.legend{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-top:8px}
+.footer{margin-top:8px;color:var(--muted);font-size:13px;text-align:center}
+.social a{color:var(--accent);text-decoration:none;margin:0 8px}
+@media (max-width:900px){ .white{width:48px} .black{width:19px} .white-keys{height:260px} }
+@media (max-width:560px){ .white{width:40px} .white-keys{height:220px} .controls{gap:8px} }
+</style>
+</head>
+  /* Evitar copiar/pegar en nombres de las notas */
+.white .lbl, .black .lbl {
+  user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -moz-user-select: none;
+  -webkit-touch-callout: none; /* iOS: evita el menú de copiar/pegar */
+  pointer-events: none;        /* el texto no captura el toque, la tecla sí */
+}
+
+/* Quitar highlight táctil molesto */
+.white, .black {
+  -webkit-tap-highlight-color: transparent;
+}
+<body>
+  <div class="app">
+    <div class="header">
+      <div>
+        <h1>🎹 Piano Virtual — Andrés Giraldo</h1>
+        <div class="subtitle">5 octavas • Polifonía • Sustain • Voces • ADSR • Reverb</div>
+      </div>
+      <div style="text-align:right">
+        <div class="small">Diseño y código: <strong>Andrés Giraldo</strong></div>
+        <div class="small social">Instagram: <a href="https://instagram.com/andres._.sgiraldo" target="_blank">@andres._.sgiraldo</a> • TikTok: <a href="https://tiktok.com/@andru_gs" target="_blank">@andru_gs</a></div>
+      </div>
+    </div>
+
+    <div class="controls" role="region" aria-label="Controles">
+      <div class="control-group"><label class="small">Voz</label><select id="voiceSelect"><option value="piano">Piano-like</option><option value="electric">Electric</option><option value="pad">Pad</option><option value="sine">Pure Sine</option></select></div>
+      <div class="control-group"><label class="small">Volumen</label><input id="masterVol" type="range" min="0" max="1" step="0.01" value="0.88"></div>
+      <div class="control-group"><label class="small">Attack</label><input id="attack" type="range" min="0.001" max="0.5" step="0.001" value="0.008"></div>
+      <div class="control-group"><label class="small">Release</label><input id="release" type="range" min="0.02" max="2.0" step="0.01" value="0.18"></div>
+      <div class="control-group"><label class="small">Reverb</label><input id="reverb" type="range" min="0" max="0.8" step="0.01" value="0.12"></div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center"><button id="sustainBtn">Sustain: off</button><button id="resetBtn" class="primary">Reset</button></div>
+    </div>
+
+    <div class="keyboard-wrap" role="application" aria-label="Piano">
+      <div id="keyboard" class="keyboard" tabindex="0" aria-label="Piano keyboard">
+        <div id="whiteContainer" class="white-keys" aria-hidden="false"></div>
+        <div id="blackContainer" class="black-container" aria-hidden="false"></div>
+      </div>
+      <div class="legend"><div>Rango: <strong>C2 → B6</strong> (5 octavas)</div><div class="small">Barra espacio = sustain • Teclado Q..P / A..L / Z..M</div></div>
+    </div>
+
+    <div class="footer">página de prueba <code>piano_andres_black_fixed.html</code>. Para codigo html.</div>
+  </div>
+
+<script>
+/* Fixed: black keys on separate container and positioned relative to white keys.
+   Keeps previous features. */
+
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioCtx();
+const masterGain = audioCtx.createGain();
+masterGain.gain.value = 0.88;
+masterGain.connect(audioCtx.destination);
+
+const reverbGain = audioCtx.createGain();
+const delay = audioCtx.createDelay();
+const feedback = audioCtx.createGain();
+const reverbLP = audioCtx.createBiquadFilter();
+delay.delayTime.value = 0.08;
+feedback.gain.value = 0.35;
+reverbLP.type = 'lowpass';
+reverbLP.frequency.value = 3000;
+reverbGain.gain.value = 0.12;
+
+// connect reverb chain and master
+reverbGain.connect(delay);
+delay.connect(feedback);
+feedback.connect(reverbLP);
+reverbLP.connect(masterGain);
+masterGain.disconnect();
+masterGain.connect(audioCtx.destination);
+masterGain.connect(reverbGain);
+
+// UI refs
+const whiteContainer = document.getElementById('whiteContainer');
+const blackContainer = document.getElementById('blackContainer');
+const keyboardEl = document.getElementById('keyboard');
+const voiceSelect = document.getElementById('voiceSelect');
+const attackEl = document.getElementById('attack');
+const releaseEl = document.getElementById('release');
+const masterVol = document.getElementById('masterVol');
+const sustainBtn = document.getElementById('sustainBtn');
+const reverbEl = document.getElementById('reverb');
+const resetBtn = document.getElementById('resetBtn');
+
+masterVol.addEventListener('input', ()=> masterGain.gain.value = parseFloat(masterVol.value));
+reverbEl.addEventListener('input', ()=> reverbGain.gain.value = parseFloat(reverbEl.value));
+document.addEventListener('pointerdown', function resumeAudio(){ if(audioCtx.state === 'suspended') audioCtx.resume(); document.removeEventListener('pointerdown', resumeAudio); });
+
+// evitar menú contextual y selección en móvil
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('selectstart', e => e.preventDefault());
+
+// notes build
+const semitones = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const notes = [];
+const startOct = 2;
+const octCount = 5; // C2..B6
+for(let o = startOct; o < startOct + octCount; o++){
+  for(let i=0;i<12;i++){
+    const name = semitones[i] + o;
+    const midi = (o + 1) * 12 + i;
+    const freq = 440 * Math.pow(2, (midi - 69)/12);
+    notes.push({name,midi,freq,isSharp: semitones[i].includes('#'), semi:i});
+  }
+}
+
+// create whites
+whiteContainer.innerHTML = '';
+const whiteEls = [];
+for(let i=0;i<notes.length;i++){
+  if(!notes[i].isSharp){
+    const w = document.createElement('div');
+    w.className = 'white';
+    w.dataset.semiIndex = i; // semitone index
+    w.dataset.index = i;
+    w.dataset.note = notes[i].name;
+    const lbl = document.createElement('div'); lbl.className='lbl'; lbl.textContent = notes[i].name;
+    w.appendChild(lbl);
+    whiteContainer.appendChild(w);
+    whiteEls.push(w);
+  }
+}
+
+// create blacks into blackContainer (absolute)
+blackContainer.innerHTML = '';
+for(let i=0;i<notes.length;i++){
+  if(notes[i].isSharp){
+    const b = document.createElement('div');
+    b.className = 'black';
+    b.dataset.semiIndex = i;
+    b.dataset.index = i;
+    b.dataset.note = notes[i].name;
+    const lbl = document.createElement('div'); lbl.className='lbl'; lbl.textContent = notes[i].name;
+    b.appendChild(lbl);
+    blackContainer.appendChild(b);
+  }
+}
+
+// position blacks relative to whites
+function positionBlackKeys(){
+  const whites = Array.from(whiteContainer.children);
+  if(whites.length === 0) return;
+  const blackEls = Array.from(blackContainer.children);
+  const whiteWidth = whites[0].getBoundingClientRect().width;
+  // set blackContainer left = whiteContainer offsetLeft (both inside keyboard)
+  const wcRect = whiteContainer.getBoundingClientRect();
+  const kbRect = keyboardEl.getBoundingClientRect();
+  const offsetLeft = whiteContainer.offsetLeft; // relative to keyboardEl
+  // position each black:
+  blackEls.forEach(b=>{
+    const semiIdx = parseInt(b.dataset.semiIndex,10);
+    // count whites before this semitone
+    const whitesBefore = notes.slice(0, semiIdx).filter(n=>!n.isSharp).length;
+    // the black should be between whitesBefore-1 and whitesBefore
+    let left = 0;
+    if(whitesBefore > 0){
+      // reference white to the left of the gap
+      const leftWhite = whites[whitesBefore-1];
+      left = leftWhite.offsetLeft + leftWhite.offsetWidth - (b.offsetWidth/2);
+    } else {
+      left = whites[0].offsetLeft - (b.offsetWidth/2);
+    }
+    b.style.left = Math.round(left) + 'px';
+  });
+}
+setTimeout(positionBlackKeys, 80);
+window.addEventListener('resize', ()=> setTimeout(positionBlackKeys, 80));
+
+// ---------- Audio voice handling (same as before) ----------
+const activeVoices = new Map();
+
+function createVoiceNodes(preset, freq){
+  const oscA = audioCtx.createOscillator();
+  const oscB = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  if(preset === 'piano'){
+    oscA.type='triangle'; oscB.type='sine'; oscA.detune.value=-5; oscB.detune.value=3; filter.frequency.value = Math.max(1200, freq*6);
+  } else if(preset === 'electric'){
+    oscA.type='sawtooth'; oscB.type='square'; oscA.detune.value=-8; oscB.detune.value=7; filter.frequency.value = Math.max(1800, freq*4);
+  } else if(preset === 'pad'){
+    oscA.type='sawtooth'; oscB.type='sine'; oscA.detune.value=-12; oscB.detune.value=12; filter.frequency.value = Math.max(900, freq*3);
+  } else {
+    oscA.type='sine'; oscB.type='sine'; filter.frequency.value = Math.max(1200, freq*4);
+  }
+  oscA.frequency.value = freq; oscB.frequency.value = freq;
+  const merger = audioCtx.createGain();
+  oscA.connect(filter); oscB.connect(filter); filter.connect(gain); gain.connect(merger); merger.connect(masterGain);
+  oscA.start(); oscB.start();
+  return {oscA,oscB,gain,filter,stopAt(after){ const now=audioCtx.currentTime; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value,now); gain.gain.linearRampToValueAtTime(0.0001, now+after); try{ oscA.stop(now+after+0.02); oscB.stop(now+after+0.02);}catch(e){} } };
+}
+
+function noteOn(idx, velocity=1){
+  if(activeVoices.has(idx)) return;
+  const n = notes[idx]; if(!n) return;
+  const preset = voiceSelect.value;
+  const nodes = createVoiceNodes(preset, n.freq);
+  const now = audioCtx.currentTime;
+  const attack = parseFloat(attackEl.value);
+  nodes.gain.gain.setValueAtTime(0.0001, now);
+  nodes.gain.gain.linearRampToValueAtTime(velocity, now + attack);
+  activeVoices.set(idx, {nodes, released:false, release: parseFloat(releaseEl.value)});
+  markKey(idx, true);
+}
+
+function noteOff(idx){
+  const v = activeVoices.get(idx);
+  if(!v) return;
+  if(sustainOn && !v.released){ v.released = true; return; }
+  v.nodes.stopAt(v.release);
+  setTimeout(()=> { activeVoices.delete(idx); }, (v.release + 0.06)*1000);
+  markKey(idx, false);
+}
+
+function releaseAllHeld(){
+  activeVoices.forEach((v, idx)=>{
+    if(v.released){
+      v.nodes.stopAt(v.release);
+      setTimeout(()=> activeVoices.delete(idx), (v.release + 0.06)*1000);
+      markKey(idx, false);
+    }
+  });
+}
+
+function markKey(idx, on){
+  const white = keyboardEl.querySelector(`.white[data-index="${idx}"]`);
+  const black = keyboardEl.querySelector(`.black[data-index="${idx}"]`);
+  const el = white || black;
+  if(!el) return;
+  if(on) el.classList.add('pressed'); else el.classList.remove('pressed');
+}
+
+// pointer events
+let sustainOn = false;
+sustainBtn.addEventListener('click', ()=> { sustainOn = !sustainOn; sustainBtn.textContent = 'Sustain: ' + (sustainOn ? 'on' : 'off'); sustainBtn.classList.toggle('primary', sustainOn); if(!sustainOn) releaseAllHeld(); });
+
+function bindPointers(){
+  const allKeys = keyboardEl.querySelectorAll('.white, .black');
+  allKeys.forEach(k=>{
+    k.style.touchAction = 'none';
+    k.addEventListener('pointerdown', ev=>{
+      ev.preventDefault();
+      const idx = parseInt(k.dataset.index,10);
+      const rect = k.getBoundingClientRect();
+      const y = ev.clientY || rect.top;
+      const rel = Math.max(0, Math.min(1, (rect.bottom - y) / rect.height));
+      const vel = 0.35 + rel*0.65;
+      noteOn(idx, vel);
+      try{ k.setPointerCapture(ev.pointerId); }catch(e){}
+    });
+    k.addEventListener('pointerup', ev=>{
+      ev.preventDefault();
+      const idx = parseInt(k.dataset.index,10);
+      noteOff(idx);
+      try{ k.releasePointerCapture(ev.pointerId);}catch(e){}
+    });
+    k.addEventListener('pointercancel', ev=> { const idx = parseInt(k.dataset.index,10); noteOff(idx); });
+  });
+}
+setTimeout(()=>{ positionBlackKeys(); bindPointers(); }, 140);
+window.addEventListener('resize', ()=> setTimeout(()=>{ positionBlackKeys(); bindPointers(); }, 80));
+
+// keyboard mapping
+const rows = [
+  ['q','2','w','3','e','r','5','t','6','y','7','u','i','9','o','0','p'],
+  ['a','z','s','x','d','c','f','v','g','b','h','n','j','m','k',',','.'],
+  [';','/','\''] // extras
+];
+const flat = [].concat(...rows);
+const keyMap = {}; let m=0;
+for(let i=0;i<flat.length && m<notes.length;i++){ keyMap[flat[i]] = m++; }
+const held = new Set();
+window.addEventListener('keydown', (e)=>{
+  const k = e.key.toLowerCase();
+  if(k===' '){ if(!sustainOn){ sustainOn=true; sustainBtn.textContent='Sustain: on'; sustainBtn.classList.add('primary'); } e.preventDefault(); return; }
+  if(keyMap.hasOwnProperty(k) && !held.has(k)){ held.add(k); noteOn(keyMap[k], 0.95); }
+});
+window.addEventListener('keyup', (e)=> {
+  const k = e.key.toLowerCase();
+  if(k===' '){ if(sustainOn){ sustainOn=false; sustainBtn.textContent='Sustain: off'; sustainBtn.classList.remove('primary'); releaseAllHeld(); } e.preventDefault(); return; }
+  if(keyMap.hasOwnProperty(k) && held.has(k)){ held.delete(k); noteOff(keyMap[k]); }
+});
+
+// reset
+resetBtn.addEventListener('click', ()=> {
+  activeVoices.forEach((v, idx)=> {
+    try{ v.nodes.oscA && v.nodes.oscA.stop(); v.nodes.oscB && v.nodes.oscB.stop(); }catch(e){}
+    activeVoices.delete(idx);
+    markKey(idx,false);
+  });
+});
+
+// finalized
+console.log('Piano (black fixed) listo — rango:', notes[0].name, '→', notes[notes.length-1].name);
+</script>
+</body>
+</html>
