@@ -36,20 +36,6 @@ button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
 @media (max-width:560px){ .white{width:40px} .white-keys{height:220px} .controls{gap:8px} }
 </style>
 </head>
-  /* Evitar copiar/pegar en nombres de las notas */
-.white .lbl, .black .lbl {
-  user-select: none;
-  -webkit-user-select: none;
-  -ms-user-select: none;
-  -moz-user-select: none;
-  -webkit-touch-callout: none; /* iOS: evita el menú de copiar/pegar */
-  pointer-events: none;        /* el texto no captura el toque, la tecla sí */
-}
-
-/* Quitar highlight táctil molesto */
-.white, .black {
-  -webkit-tap-highlight-color: transparent;
-}
 <body>
   <div class="app">
     <div class="header">
@@ -71,29 +57,8 @@ button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
       <div class="control-group"><label class="small">Reverb</label><input id="reverb" type="range" min="0" max="0.8" step="0.01" value="0.12"></div>
       <div style="margin-left:auto;display:flex;gap:8px;align-items:center"><button id="sustainBtn">Sustain: off</button><button id="resetBtn" class="primary">Reset</button></div>
     </div>
-<div style="margin-bottom:8px;">
-  <button id="toggleEarTrainer" class="primary">Entrenador de oído ▼</button>
-                                                                                                                           </div>
+
     <div class="keyboard-wrap" role="application" aria-label="Piano">
-    
-      <div id="earTrainerPanel" style="display:none; margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;">
-  <button id="playRandomNote" class="primary">Reproducir nota aleatoria</button>
-  <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">
-    <button class="noteBtn">C</button>
-    <button class="noteBtn">C#</button>
-    <button class="noteBtn">D</button>
-    <button class="noteBtn">D#</button>
-    <button class="noteBtn">E</button>
-    <button class="noteBtn">F</button>
-    <button class="noteBtn">F#</button>
-    <button class="noteBtn">G</button>
-    <button class="noteBtn">G#</button>
-    <button class="noteBtn">A</button>
-    <button class="noteBtn">A#</button>
-    <button class="noteBtn">B</button>
-  </div>
-  <div id="earTrainerResult" style="margin-top:8px; font-weight:bold; color:#00d4b4;"></div>
-      </div>
       <div id="keyboard" class="keyboard" tabindex="0" aria-label="Piano keyboard">
         <div id="whiteContainer" class="white-keys" aria-hidden="false"></div>
         <div id="blackContainer" class="black-container" aria-hidden="false"></div>
@@ -107,18 +72,7 @@ button.primary{background:var(--accent);color:#012;border:none;font-weight:700}
 <script>
 /* Fixed: black keys on separate container and positioned relative to white keys.
    Keeps previous features. */
-const toggleBtn = document.getElementById('toggleEarTrainer');
-const earTrainerPanel = document.getElementById('earTrainerPanel');
 
-toggleBtn.addEventListener('click', () => {
-  if(earTrainerPanel.style.display === 'none'){
-    earTrainerPanel.style.display = 'block';
-    toggleBtn.textContent = 'Entrenador de oído ▲';
-  } else {
-    earTrainerPanel.style.display = 'none';
-    toggleBtn.textContent = 'Entrenador de oído ▼';
-  }
-});
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioCtx();
 const masterGain = audioCtx.createGain();
@@ -159,10 +113,6 @@ const resetBtn = document.getElementById('resetBtn');
 masterVol.addEventListener('input', ()=> masterGain.gain.value = parseFloat(masterVol.value));
 reverbEl.addEventListener('input', ()=> reverbGain.gain.value = parseFloat(reverbEl.value));
 document.addEventListener('pointerdown', function resumeAudio(){ if(audioCtx.state === 'suspended') audioCtx.resume(); document.removeEventListener('pointerdown', resumeAudio); });
-
-// evitar menú contextual y selección en móvil
-document.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('selectstart', e => e.preventDefault());
 
 // notes build
 const semitones = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
@@ -265,7 +215,6 @@ function createVoiceNodes(preset, freq){
   return {oscA,oscB,gain,filter,stopAt(after){ const now=audioCtx.currentTime; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value,now); gain.gain.linearRampToValueAtTime(0.0001, now+after); try{ oscA.stop(now+after+0.02); oscB.stop(now+after+0.02);}catch(e){} } };
 }
 
-  
 function noteOn(idx, velocity=1){
   if(activeVoices.has(idx)) return;
   const n = notes[idx]; if(!n) return;
@@ -287,16 +236,7 @@ function noteOff(idx){
   setTimeout(()=> { activeVoices.delete(idx); }, (v.release + 0.06)*1000);
   markKey(idx, false);
 }
-// ---------- ENTRENADOR DE OÍDO ----------
-function playRandomNote() {
-  const randomIndex = Math.floor(Math.random() * notes.length);
-  noteOn(randomIndex, 1);           // suena la nota
-  setTimeout(() => noteOff(randomIndex), 1000); // se apaga después de 1s
-  return randomIndex;               // devuelve índice para compararlo con la respuesta
-}
 
-// variable para guardar la nota actual que suena
-let currentEarTrainingNote = null;
 function releaseAllHeld(){
   activeVoices.forEach((v, idx)=>{
     if(v.released){
@@ -306,52 +246,7 @@ function releaseAllHeld(){
     }
   });
 }
-// Crear panel desplegable
-const earPanel = document.createElement('div');
-earPanel.style.background = '#0b2330';
-earPanel.style.padding = '10px';
-earPanel.style.marginBottom = '12px';
-earPanel.style.borderRadius = '10px';
-earPanel.style.display = 'none'; // oculto por defecto
-earPanel.id = 'earTrainingPanel';
 
-const toggleBtn = document.createElement('button');
-toggleBtn.textContent = '🎧 Entrenador de oído ▼';
-toggleBtn.style.marginBottom = '6px';
-toggleBtn.onclick = () => {
-  earPanel.style.display = earPanel.style.display === 'none' ? 'block' : 'none';
-}
-
-document.querySelector('.keyboard-wrap').prepend(toggleBtn);
-document.querySelector('.keyboard-wrap').prepend(earPanel);
-
-// botones de notas
-const noteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-noteNames.forEach(n=>{
-  const btn = document.createElement('button');
-  btn.textContent = n;
-  btn.style.margin = '2px';
-  btn.onclick = () => {
-    if(currentEarTrainingNote === null) return;
-    const selectedNote = n + Math.floor(currentEarTrainingNote / 12); // convertir índice a nota con octava
-    if(notes[currentEarTrainingNote].name === selectedNote){
-      alert('✅ Correcto!');
-      currentEarTrainingNote = null;
-    } else {
-      alert('❌ Incorrecto! Era ' + notes[currentEarTrainingNote].name);
-    }
-  };
-  earPanel.appendChild(btn);
-});
-
-// botón para generar nueva nota
-const playBtn = document.createElement('button');
-playBtn.textContent = '🔊 Reproducir nota';
-playBtn.style.marginLeft = '10px';
-playBtn.onclick = () => {
-  currentEarTrainingNote = playRandomNote();
-};
-earPanel.appendChild(playBtn);
 function markKey(idx, on){
   const white = keyboardEl.querySelector(`.white[data-index="${idx}"]`);
   const black = keyboardEl.querySelector(`.black[data-index="${idx}"]`);
