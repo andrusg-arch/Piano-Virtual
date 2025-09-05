@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Piano Virtual — Andrés Giraldo (Blacks fixed)</title>
 <style>
+  /* Evitar copiar/pegar en nombres de las notas */
+.white .lbl, .black .lbl {
+  user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -moz-user-select: none;
+  -webkit-touch-callout: none; /* iOS: evita el menú de copiar/pegar */
+  pointer-events: none;        /* el texto no captura el toque, la tecla sí */
+}
+
+/* Quitar highlight táctil molesto */
+.white, .black {
+  -webkit-tap-highlight-color: transparent;
+}
 :root{
   --bg:#071126; --panel:#0b2330; --muted:#9fb0bd; --accent:#00d4b4;
   --white:#fffdf6; --white-edge:#d4cec4; --black:#0b0f12;
@@ -113,7 +127,9 @@ const resetBtn = document.getElementById('resetBtn');
 masterVol.addEventListener('input', ()=> masterGain.gain.value = parseFloat(masterVol.value));
 reverbEl.addEventListener('input', ()=> reverbGain.gain.value = parseFloat(reverbEl.value));
 document.addEventListener('pointerdown', function resumeAudio(){ if(audioCtx.state === 'suspended') audioCtx.resume(); document.removeEventListener('pointerdown', resumeAudio); });
-
+// evitar menú contextual y selección por largo toque
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('selectstart', e => e.preventDefault());
 // notes build
 const semitones = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const notes = [];
