@@ -206,90 +206,173 @@ function positionBlackKeys(){
 setTimeout(positionBlackKeys, 80);
 window.addEventListener('resize', ()=> setTimeout(positionBlackKeys, 80));
 
-// ---------- Reproducción con samples ----------
-const sampleNames = ["C2","C3","C4","C5","C6"];
-const samples = {};
-let samplesLoaded = false;
+// ---------- Audio con samples de piano ----------
+const activeVoices = new Map();
 
-// Cargar audios desde el mismo directorio que index.html
-async function loadSamples(){
-  for(const name of sampleNames){
-    const resp = await fetch(name + ".mp3");
-    const arrayBuffer = await resp.arrayBuffer();
-    samples[name] = await audioCtx.decodeAudioData(arrayBuffer);
+const sampleNotes = {
+  "C2": "C2.mp3",
+  "C3": "C3.mp3",
+  "C4": "C4.mp3",
+  "C5": "C5.mp3",
+  "C6": "C6.mp3"
+};
+
+const sampleBuffers = {};
+async function loadSamples() {
+  for (let note in sampleNotes) {
+    const resp = await fetch(sampleNotes[note]);
+    const arr = await resp.arrayBuffer();
+    sampleBuffers[note] = await audioCtx.decodeAudioData(arr);
   }
-  samplesLoaded = true;
-  console.log("Samples cargados 🎵");
+  console.log("✅ Samples cargados");
 }
 loadSamples();
 
-// Guardar frecuencia de cada sample
-const sampleFreq = {};
-sampleNames.forEach(n => {
-  const found = notes.find(x => x.name === n);
-  sampleFreq[n] = found ? found.freq : 440;
-});
-
-// Elegir sample más cercano a la nota
-function getClosestSample(noteName){
-  const noteObj = notes.find(n=>n.name===noteName);
-  if(!noteObj) return sampleNames[0];
-  const freq = noteObj.freq;
-  let closest = sampleNames[0];
-  let minDiff = Infinity;
-  for(const s of sampleNames){
-    const diff = Math.abs(sampleFreq[s] - freq);
-    if(diff < minDiff){ minDiff = diff; closest = s; }
+function getNearestSample(noteName) {
+  const candidates = Object.keys(sampleNotes);
+  let best = candidates[0];
+  let min = 999;
+  for (let c of candidates) {
+    const diff = Math.abs(
+      notes.findIndex(n => n.name === noteName) -
+      notes.findIndex(n => n.name === c)
+    );
+    if (diff < min) { min = diff; best = c; }
   }
-  return closest;
+  return best;
 }
 
-// Notas activas
-const activeVoices = new Map();
-
-// Al presionar tecla
 function noteOn(idx, velocity=1){
-  if(activeVoices.has(idx)) return;
   const n = notes[idx];
-  if(!samplesLoaded) return;
+  const nearest = getNearestSample(n.name);
+  const buf = sampleBuffers[nearest];
+  if (!buf) { console.warn("⏳ Aún no cargado:", nearest); return; }
 
-  const closest = getClosestSample(n.name);
-  const buffer = samples[closest];
-  if(!buffer) return;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const rate = n.freq / notes.find(nn => nn.name === nearest).freq;
+  src.playbackRate.value = rate;
 
-  const source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  source.playbackRate.value = n.freq / sampleFreq[closest];
+  const gain = audioCtx.createGain();
+  gain.gain.value = velocity;
 
-  const gainNode = audioCtx.createGain();
-  gainNode.gain.value = velocity;
-
-  source.connect(gainNode).connect(masterGain);
-  source.start();
-
-  activeVoices.set(idx, {source, gainNode});
+  src.connect(gain).connect(masterGain);
+  src.start();
+  activeVoices.set(idx, {src, gain});
   markKey(idx, true);
 }
 
-// Al soltar tecla
+function noteOff(idx){
+  const v = activeVoices.get(idx);
+  if (!v) return;
+  v.gain.gain.linearRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+  v.src.stop(audioCtx.currentTime + 0.31);
+  activeVoices.delete(idx);
+  markKey(idx, false);
+  }
+
+function noteOn(idx, velocity=1){
+  if(activeVoices.has(idx)) return;
+  const n = notes[idx]; if(!n) return;
+  const preset = voiceSelect.value;
+  const nodes = createVoiceNodes(preset, n.freq);
+  const now = audioCtx.currentTime;
+  const attack = parseFloat(attackEl.value);
+  nodes.gain.gain.setValueAtTime(0.0001, now);
+  nodes.gain.gain.linearRampToValueAtTime(velocity, now + attack);
+  activeVoices.set(idx, {nodes, released:false, release: parseFloat(releaseEl.value)});
+  markKey(idx, true);
+}
+
 function noteOff(idx){
   const v = activeVoices.get(idx);
   if(!v) return;
-  try{ v.source.stop(); }catch(e){}
-  activeVoices.delete(idx);
+  if(sustainOn && !v.released){ v.released = true; return; }
+  v.nodes.stopAt(v.release);
+  setTimeout(()=> { activeVoices.delete(idx); }, (v.release + 0.06)*1000);
   markKey(idx, false);
 }
 
-// Botón reset
-resetBtn.addEventListener('click', ()=>{
+function releaseAllHeld(){
   activeVoices.forEach((v, idx)=>{
-    try{ v.source.stop(); }catch(e){}
+    if(v.released){
+      v.nodes.stopAt(v.release);
+      setTimeout(()=> activeVoices.delete(idx), (v.release + 0.06)*1000);
+      markKey(idx, false);
+    }
+  });
+}
+
+function markKey(idx, on){
+  const white = keyboardEl.querySelector(`.white[data-index="${idx}"]`);
+  const black = keyboardEl.querySelector(`.black[data-index="${idx}"]`);
+  const el = white || black;
+  if(!el) return;
+  if(on) el.classList.add('pressed'); else el.classList.remove('pressed');
+}
+
+// pointer events
+let sustainOn = false;
+sustainBtn.addEventListener('click', ()=> { sustainOn = !sustainOn; sustainBtn.textContent = 'Sustain: ' + (sustainOn ? 'on' : 'off'); sustainBtn.classList.toggle('primary', sustainOn); if(!sustainOn) releaseAllHeld(); });
+
+function bindPointers(){
+  const allKeys = keyboardEl.querySelectorAll('.white, .black');
+  allKeys.forEach(k=>{
+    k.style.touchAction = 'none';
+    k.addEventListener('pointerdown', ev=>{
+      ev.preventDefault();
+      const idx = parseInt(k.dataset.index,10);
+      const rect = k.getBoundingClientRect();
+      const y = ev.clientY || rect.top;
+      const rel = Math.max(0, Math.min(1, (rect.bottom - y) / rect.height));
+      const vel = 0.35 + rel*0.65;
+      noteOn(idx, vel);
+      try{ k.setPointerCapture(ev.pointerId); }catch(e){}
+    });
+    k.addEventListener('pointerup', ev=>{
+      ev.preventDefault();
+      const idx = parseInt(k.dataset.index,10);
+      noteOff(idx);
+      try{ k.releasePointerCapture(ev.pointerId);}catch(e){}
+    });
+    k.addEventListener('pointercancel', ev=> { const idx = parseInt(k.dataset.index,10); noteOff(idx); });
+  });
+}
+setTimeout(()=>{ positionBlackKeys(); bindPointers(); }, 140);
+window.addEventListener('resize', ()=> setTimeout(()=>{ positionBlackKeys(); bindPointers(); }, 80));
+
+// keyboard mapping
+const rows = [
+  ['q','2','w','3','e','r','5','t','6','y','7','u','i','9','o','0','p'],
+  ['a','z','s','x','d','c','f','v','g','b','h','n','j','m','k',',','.'],
+  [';','/','\''] // extras
+];
+const flat = [].concat(...rows);
+const keyMap = {}; let m=0;
+for(let i=0;i<flat.length && m<notes.length;i++){ keyMap[flat[i]] = m++; }
+const held = new Set();
+window.addEventListener('keydown', (e)=>{
+  const k = e.key.toLowerCase();
+  if(k===' '){ if(!sustainOn){ sustainOn=true; sustainBtn.textContent='Sustain: on'; sustainBtn.classList.add('primary'); } e.preventDefault(); return; }
+  if(keyMap.hasOwnProperty(k) && !held.has(k)){ held.add(k); noteOn(keyMap[k], 0.95); }
+});
+window.addEventListener('keyup', (e)=> {
+  const k = e.key.toLowerCase();
+  if(k===' '){ if(sustainOn){ sustainOn=false; sustainBtn.textContent='Sustain: off'; sustainBtn.classList.remove('primary'); releaseAllHeld(); } e.preventDefault(); return; }
+  if(keyMap.hasOwnProperty(k) && held.has(k)){ held.delete(k); noteOff(keyMap[k]); }
+});
+
+// reset
+resetBtn.addEventListener('click', ()=> {
+  activeVoices.forEach((v, idx)=> {
+    try{ v.nodes.oscA && v.nodes.oscA.stop(); v.nodes.oscB && v.nodes.oscB.stop(); }catch(e){}
     activeVoices.delete(idx);
     markKey(idx,false);
   });
 });
 
-console.log('🎹 Piano con samples listo');
+// finalized
+console.log('Piano (black fixed) listo — rango:', notes[0].name, '→', notes[notes.length-1].name);
 </script>
 </body>
-</html>
+  </html>
